@@ -1,0 +1,26 @@
+[package]
+name = "terminal"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The DF Terminal — egui GUI styled like Claude Desktop. The mother. The sole command authority."
+
+[[bin]]
+name = "lu_ai"
+path = "src/main.rs"
+
+[lib]
+name = "terminal"
+path = "src/lib.rs"
+
+[dependencies]
+df_core = { workspace = true }
+graph = { workspace = true }
+brain = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+dirs = "6"

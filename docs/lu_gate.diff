@@ -1,0 +1,34 @@
+--- lu_gate.py.phase3.bak	2026-10-02 16:18:45.790590400 -0400
++++ lu_gate.py	2026-10-02 16:19:00.892569400 -0400
+@@ -66,7 +66,31 @@
+         self.revoke_confirm[tool] = resp
+         self.forbid_delta[tool] = {'before': before, 'after': after}
+         return resp
++    def reachable(self, query, seed_hex=''):
++        """Phase 3: genuine GRAPH reachability via lu_reachable. A revoked (inactive)
++        node is excluded from recall -> unreachable. This is the STRUCTURAL signal."""
++        r = json.loads(self.lu.call('lu_reachable', {'query': query, 'seed_hex': seed_hex or '', 'top_k': 10}))
++        return bool(r.get('reachable')), r.get('candidates', [])
++
+     def check(self, tool):
++        """STRUCTURAL verdict: a capability is allowed IFF its node is reachable in the
++        live Lu graph. Decision is graph reachability, not `tool in self.revoked`."""
++        st = self.status()
++        if tool not in self.seeds:
++            return (False, 'unknown capability (not registered in Lu)', {'lu_status': st})
++        seed = self.seeds[tool]
++        reach, cands = self.reachable(tool, seed[:16])
++        severed = tool in self.revoked
++        corroborated = (severed == (not reach))   # severed <=> graph-unreachable
++        ev = {'tool': tool, 'seed16': seed[:16], 'graph_reachable': reach,
++              'recall_candidates': len(cands), 'severed_flag': severed,
++              'lu_corroborates_severance': corroborated, 'lu_status_live': st,
++              'decided_by': 'graph_reachability'}
++        if not reach:
++            return (False, self.rules.get(tool, 'structurally unreachable (revoked node absent from recall)'), ev)
++        return (True, None, ev)
++
++    def _old_check(self, tool):
+         """Tool-identity verdict. (allowed, rule, evidence) sourced from Lu live state."""
+         st = self.status()
+         if tool not in self.seeds:

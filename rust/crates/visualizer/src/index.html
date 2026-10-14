@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Factory — Brain Map</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0f;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+#header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 48px; background: #111118;
+  border-bottom: 1px solid #222;
+  display: flex; align-items: center;
+  padding: 0 20px; z-index: 10;
+  gap: 20px;
+}
+#header h1 {
+  font-size: 16px; font-weight: 600;
+  color: #7c9aff;
+  white-space: nowrap;
+}
+#stats {
+  font-size: 12px; color: #888;
+  display: flex; gap: 16px;
+}
+#stats span { color: #aaa; }
+#search-box {
+  margin-left: auto;
+  background: #1a1a24; border: 1px solid #333;
+  color: #e0e0e0; padding: 6px 12px;
+  border-radius: 4px; font-size: 13px;
+  width: 240px; outline: none;
+}
+#search-box:focus { border-color: #7c9aff; }
+#search-box::placeholder { color: #555; }
+canvas {
+  position: fixed;
+  top: 48px; left: 0;
+  cursor: grab;
+}
+canvas:active { cursor: grabbing; }
+#tooltip {
+  position: fixed;
+  display: none;
+  background: #1a1a28;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 10px 14px;
+  max-width: 400px;
+  font-size: 12px;
+  line-height: 1.5;
+  z-index: 20;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+#tooltip .label {
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+#tooltip .meta {
+  color: #888;
+  font-size: 11px;
+}
+#tooltip .bonds-list {
+  margin-top: 6px;
+  color: #7c9aff;
+  font-size: 11px;
+}
+#legend {
+  position: fixed;
+  bottom: 16px; left: 16px;
+  background: #111118cc;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 11px;
+  z-index: 10;
+}
+#legend div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+}
+#legend .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>AI Factory — Brain Map</h1>
+  <div id="stats">
+    <div>Nodes: <span id="node-count">0</span></div>
+    <div>Bonds: <span id="bond-count">0</span></div>
+    <div>Showing: <span id="visible-count">0</span></div>
+  </div>
+  <input id="search-box" type="text" placeholder="Search nodes... (Enter to filter)">
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="tooltip">
+  <div class="label"></div>
+  <div class="meta"></div>
+  <div class="bonds-list"></div>
+</div>
+
+<div id="legend">
+  <div><span class="dot" style="background:#4ecdc4"></span> High connectivity (hub)</div>
+  <div><span class="dot" style="background:#7c9aff"></span> Medium connectivity</div>
+  <div><span class="dot" style="background:#ff6b6b"></span> Low connectivity (leaf)</div>
+  <div><span class="dot" style="background:#ffd93d"></span> Search match</div>
+  <div style="color:#666; margin-top:4px">Scroll to zoom · Drag to pan · Hover for details</div>
+</div>
+
+<script>
+// ─── Configuration ──────────────────────────────────
+const MAX_VISIBLE_NODES = 500;
+const MAX_VISIBLE_BONDS = 1200;
+const NODE_BASE_RADIUS = 3;
+const BOND_ALPHA = 0.06;
+const FORCE_LINK_DISTANCE = 180;
+
+// ─── State ──────────────────────────────────────────
+let allNodes = [];
+let allBonds = [];
+let visibleNodes = [];
+let visibleBonds = [];
+let transform = { x: 0, y: 0, k: 1 };
+let hoveredNode = null;
+let searchTerm = '';
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let wsConnected = false;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ─── Canvas Setup ───────────────────────────────────
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight - 48;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── Color by connectivity ─────────────────────────
+function nodeColor(node) {
+  if (node.highlighted) return '#ffd93d';
+  const bonds = node.bondCount || 0;
+  if (bonds >= 8) return '#4ecdc4';
+  if (bonds >= 3) return '#7c9aff';
+  return '#ff6b6b';
+}
+
+function nodeRadius(node) {
+  const bonds = node.bondCount || 0;
+  return NODE_BASE_RADIUS + Math.min(bonds * 0.3, 4);
+}
+
+// ─── Force Simulation (simplified) ─────────────────
+// We use a simple force-directed layout computed incrementally.
+// For 800 nodes this runs smoothly on canvas.
+let simRunning = false;
+let simAlpha = 1.0;
+
+function initPositions() {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  for (const n of visibleNodes) {
+    if (!isFinite(n.x)) {
+      n.x = cx + (Math.random() - 0.5) * canvas.width * 1.4;
+      n.y = cy + (Math.random() - 0.5) * canvas.height * 1.4;
+    }
+    n.vx = 0;
+    n.vy = 0;
+  }
+}
+
+function simStep() {
+  if (simAlpha < 0.001) { simRunning = false; return; }
+  simAlpha *= 0.992;
+
+  const cnt = visibleNodes.length;
+  if (cnt === 0) return;
+
+  const nodeMap = {};
+  for (const n of visibleNodes) nodeMap[n.id] = n;
+
+  // ── Repulsion: Barnes-Hut style sampling ──
+  // Strong repulsion keeps clusters apart
+  const REPULSION = 600 * simAlpha;
+  const samples = Math.min(60, cnt - 1);
+  for (let i = 0; i < cnt; i++) {
+    const a = visibleNodes[i];
+    for (let s = 0; s < samples; s++) {
+      const j = Math.floor(Math.random() * cnt);
+      if (j === i) continue;
+      const b = visibleNodes[j];
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const d2 = Math.max(dx * dx + dy * dy, 400); // min 20px apart
+      const d = Math.sqrt(d2);
+      const f = REPULSION * (cnt / samples) / d2;
+      const fx = (dx / d) * f;
+      const fy = (dy / d) * f;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+  }
+
+  // ── Attraction along bonds (very weak) ──
+  const SPRING = 0.0008 * simAlpha;
+  for (const bond of visibleBonds) {
+    const a = nodeMap[bond.source];
+    const t = nodeMap[bond.target];
+    if (!a || !t) continue;
+    const dx = t.x - a.x;
+    const dy = t.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Only pull if beyond rest length; no push if already close
+    if (d > FORCE_LINK_DISTANCE) {
+      const f = (d - FORCE_LINK_DISTANCE) * SPRING;
+      const fx = (dx / d) * f;
+      const fy = (dy / d) * f;
+      a.vx += fx; a.vy += fy;
+      t.vx -= fx; t.vy -= fy;
+    }
+  }
+
+  // ── Center gravity + damping + position update ──
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const GRAVITY = 0.0003;
+  const DAMPING = 0.82;
+  const MAX_V = 12;
+  for (const a of visibleNodes) {
+    a.vx += (cx - a.x) * GRAVITY;
+    a.vy += (cy - a.y) * GRAVITY;
+    a.vx *= DAMPING;
+    a.vy *= DAMPING;
+    const v = Math.sqrt(a.vx * a.vx + a.vy * a.vy);
+    if (v > MAX_V) { a.vx *= MAX_V / v; a.vy *= MAX_V / v; }
+    a.x += a.vx;
+    a.y += a.vy;
+    if (!isFinite(a.x)) { a.x = cx + Math.random() * 10; a.y = cy + Math.random() * 10; a.vx = 0; a.vy = 0; }
+  }
+}
+
+// ─── Render ─────────────────────────────────────────
+function draw() {
+  if (simRunning) simStep();
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(transform.x, transform.y);
+  ctx.scale(transform.k, transform.k);
+
+  // Draw bonds
+  ctx.strokeStyle = `rgba(100, 120, 180, ${BOND_ALPHA})`;
+  ctx.lineWidth = 0.5 / transform.k;
+  const nodeMap = {};
+  for (const n of visibleNodes) nodeMap[n.id] = n;
+  ctx.beginPath();
+  for (const b of visibleBonds) {
+    const a = nodeMap[b.source];
+    const t = nodeMap[b.target];
+    if (!a || !t) continue;
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(t.x, t.y);
+  }
+  ctx.stroke();
+
+  // Draw nodes
+  for (const n of visibleNodes) {
+    const r = nodeRadius(n);
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = nodeColor(n);
+    ctx.fill();
+  }
+
+  // Hovered node highlight
+  if (hoveredNode) {
+    const r = nodeRadius(hoveredNode) + 3;
+    ctx.beginPath();
+    ctx.arc(hoveredNode.x, hoveredNode.y, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5 / transform.k;
+    ctx.stroke();
+
+    // Draw bonds of hovered node brighter
+    ctx.strokeStyle = 'rgba(124, 154, 255, 0.5)';
+    ctx.lineWidth = 1 / transform.k;
+    ctx.beginPath();
+    for (const b of visibleBonds) {
+      if (b.source === hoveredNode.id || b.target === hoveredNode.id) {
+        const a = nodeMap[b.source];
+        const t = nodeMap[b.target];
+        if (a && t) { ctx.moveTo(a.x, a.y); ctx.lineTo(t.x, t.y); }
+      }
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  requestAnimationFrame(draw);
+}
+
+// ─── Mouse Interaction ──────────────────────────────
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - transform.x) / transform.k,
+    y: (sy - 48 - transform.y) / transform.k
+  };
+}
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.9 : 1.1;
+  const mx = e.clientX;
+  const my = e.clientY - 48;
+  transform.x = mx - (mx - transform.x) * factor;
+  transform.y = my - (my - transform.y) * factor;
+  transform.k *= factor;
+}, { passive: false });
+
+canvas.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  dragStart = { x: e.clientX - transform.x, y: e.clientY - 48 - transform.y };
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (isDragging) {
+    transform.x = e.clientX - dragStart.x;
+    transform.y = e.clientY - 48 - dragStart.y;
+    return;
+  }
+  // Hit test for hover
+  const w = screenToWorld(e.clientX, e.clientY);
+  hoveredNode = null;
+  const tooltip = document.getElementById('tooltip');
+  for (const n of visibleNodes) {
+    const dx = n.x - w.x;
+    const dy = n.y - w.y;
+    const r = nodeRadius(n) + 2;
+    if (dx * dx + dy * dy < (r * r) / (transform.k * transform.k) * 4) {
+      hoveredNode = n;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX + 16) + 'px';
+      tooltip.style.top = (e.clientY + 16) + 'px';
+      tooltip.querySelector('.label').textContent = n.label;
+      tooltip.querySelector('.meta').textContent =
+        `Seed: ${n.id.slice(0, 16)}... | Bonds: ${n.bondCount || 0} | Confidence: ${n.confidence || 'unknown'}`;
+      const bondsHtml = (n.connectedLabels || []).slice(0, 5)
+        .map(l => '→ ' + l.slice(0, 60)).join('<br>');
+      tooltip.querySelector('.bonds-list').innerHTML = bondsHtml;
+      break;
+    }
+  }
+  if (!hoveredNode) tooltip.style.display = 'none';
+});
+
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+canvas.addEventListener('mouseleave', () => {
+  isDragging = false;
+  document.getElementById('tooltip').style.display = 'none';
+});
+
+// ─── Search ─────────────────────────────────────────
+document.getElementById('search-box').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    searchTerm = e.target.value.toLowerCase().trim();
+    filterAndLayout();
+  }
+});
+
+// ─── Data Loading ───────────────────────────────────
+function filterAndLayout() {
+  // If search active, show matching nodes + their neighbors
+  if (searchTerm) {
+    const matched = new Set();
+    for (const n of allNodes) {
+      n.highlighted = false;
+      if (n.label.toLowerCase().includes(searchTerm)) {
+        matched.add(n.id);
+        n.highlighted = true;
+      }
+    }
+    // Add neighbors of matched
+    const expanded = new Set(matched);
+    for (const b of allBonds) {
+      if (matched.has(b.source)) expanded.add(b.target);
+      if (matched.has(b.target)) expanded.add(b.source);
+    }
+    visibleNodes = allNodes.filter(n => expanded.has(n.id)).slice(0, MAX_VISIBLE_NODES);
+  } else {
+    // Show top 350 by connectivity + 150 random for variety
+    const sorted = [...allNodes].sort((a, b) => (b.bondCount || 0) - (a.bondCount || 0));
+    const topSet = new Set(sorted.slice(0, 350).map(n => n.id));
+    const rest = allNodes.filter(n => !topSet.has(n.id));
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    visibleNodes = [...sorted.slice(0, 350), ...rest.slice(0, 150)];
+    for (const n of visibleNodes) n.highlighted = false;
+  }
+
+  const visibleSet = new Set(visibleNodes.map(n => n.id));
+  visibleBonds = allBonds.filter(b =>
+    visibleSet.has(b.source) && visibleSet.has(b.target)
+  ).slice(0, MAX_VISIBLE_BONDS);
+
+  document.getElementById('visible-count').textContent = visibleNodes.length;
+
+  // Initialize positions for any nodes without valid coordinates
+  initPositions();
+  simAlpha = 0.8;
+  simRunning = true;
+}
+
+async function loadData() {
+  try {
+    const resp = await fetch('/api/graph');
+    const data = await resp.json();
+    allNodes = data.nodes || [];
+    allBonds = data.bonds || [];
+    document.getElementById('node-count').textContent = data.total_nodes || allNodes.length;
+    document.getElementById('bond-count').textContent = data.total_bonds || allBonds.length;
+    filterAndLayout();
+  } catch (e) {
+    console.error('Failed to load graph data:', e);
+  }
+}
+
+// ─── WebSocket for live updates ─────────────────────
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen = () => {
+    wsConnected = true;
+    console.log('WebSocket connected');
+  };
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'node_added') {
+        allNodes.push(msg.node);
+        document.getElementById('node-count').textContent = allNodes.length;
+        filterAndLayout();
+      } else if (msg.type === 'bond_added') {
+        allBonds.push(msg.bond);
+        document.getElementById('bond-count').textContent = allBonds.length;
+        // Update bond counts
+        for (const n of allNodes) {
+          if (n.id === msg.bond.source || n.id === msg.bond.target) {
+            n.bondCount = (n.bondCount || 0) + 1;
+          }
+        }
+      }
+    } catch (err) {}
+  };
+  ws.onclose = () => {
+    wsConnected = false;
+    setTimeout(connectWS, 3000); // reconnect
+  };
+}
+
+// ─── Boot ───────────────────────────────────────────
+loadData();
+connectWS();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

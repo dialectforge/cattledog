@@ -1,0 +1,35 @@
+--- lu_wrapper.py.phase3.bak	2026-10-02 16:18:45.795590400 -0400
++++ lu_wrapper.py	2026-10-02 16:19:18.446558600 -0400
+@@ -98,6 +98,32 @@
+         if gu: reasons.append('output:guard_unsafe(%s)' % gc)
+         return (len(reasons) == 0), reasons
+ 
++    # ---- CHANNEL SCREEN (Phase 3): gate RETRIEVAL + TOOL RETURNS before use ----
++    def screen_channel(self, text, kind='retrieval'):
++        """Run the same scar + guard checks on retrieved text / tool results BEFORE
++        they enter the model context or are used. Closes the Phase-2 reintroduction
++        leak where a revoked/scarred fact re-entered via retrieved text unscreened."""
++        reasons = []
++        st, sc = self._scar(text)
++        if st: reasons.append('%s:semantic_scar(%s)' % (kind, sc[0] if sc else ''))
++        gu, gc = self._guard('user', text)
++        if gu: reasons.append('%s:guard_unsafe(%s)' % (kind, gc))
++        return (len(reasons) == 0), reasons
++
++    def run_with_context(self, text, retrieved=None, tool_returns=None):
++        """Full pipeline WITH retrieval/tool-return gating. Each external channel is
++        screened before it can influence generation or be used."""
++        for r in (retrieved or []):
++            ok, why = self.screen_channel(r, 'retrieval')
++            if not ok:
++                return {'decision':'BLOCK','stage':'retrieval','reasons':why,'output':'[retrieved content blocked before use]'}
++        for t in (tool_returns or []):
++            ok, why = self.screen_channel(t, 'tool_return')
++            if not ok:
++                return {'decision':'BLOCK','stage':'tool_return','reasons':why,'output':'[tool result blocked before use]'}
++        # channels clean -> normal pipeline (input screen -> gen -> output screen)
++        return self.run(text)
++
+     # ---- END TO END ----
+     def run(self, text, simulate_tool_calls=None):
+         ok_in, rin = self.screen_input(text)

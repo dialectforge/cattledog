@@ -1,0 +1,44 @@
+// ── BGE-small ONNX semantic embedding (CattleDog keystone) ──────────────────
+// Real dense embeddings via fastembed (ort/ONNX Runtime under the hood) loading
+// the locally-downloaded BGE-small-en-v1.5 model + tokenizer. No npm, no axios.
+use std::sync::OnceLock;
+
+fn _bge_dir() -> std::path::PathBuf {
+    std::env::var("LU_BGE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("v2/models/bge-small-en-v1.5"))
+}
+
+static _BGE: OnceLock<Option<fastembed::TextEmbedding>> = OnceLock::new();
+
+fn _bge() -> Option<&'static fastembed::TextEmbedding> {
+    _BGE.get_or_init(|| {
+        let d = _bge_dir();
+        let rd = |f: &str| std::fs::read(d.join(f)).ok();
+        let tok = fastembed::TokenizerFiles {
+            tokenizer_file: rd("tokenizer.json")?,
+            config_file: rd("config.json")?,
+            special_tokens_map_file: rd("special_tokens_map.json")?,
+            tokenizer_config_file: rd("tokenizer_config.json")?,
+        };
+        let onnx = rd("model.onnx")?;
+        let m = fastembed::UserDefinedEmbeddingModel::new(onnx, tok)
+            .with_pooling(fastembed::Pooling::Cls);
+        match fastembed::TextEmbedding::try_new_from_user_defined(
+            m, fastembed::InitOptionsUserDefined::default()) {
+            Ok(t) => { eprintln!("[bge] BGE-small ONNX embedder loaded"); Some(t) }
+            Err(e) => { eprintln!("[bge] init failed, falling back to lexical: {e}"); None }
+        }
+    }).as_ref()
+}
+
+/// Real dense semantic embedding (BGE-small-en-v1.5, 384-dim). Falls back to the
+/// lexical StubEngine if the model cannot load.
+pub fn semantic_embed(text: &str) -> Vec<f32> {
+    if let Some(engine) = _bge() {
+        if let Ok(mut v) = engine.embed(vec![text], None) {
+            if let Some(e) = v.pop() { return e; }
+        }
+    }
+    StubEngine::new(384).embed(text).unwrap_or_else(|_| vec![0.0; 384])
+}

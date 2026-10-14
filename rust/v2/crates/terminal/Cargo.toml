@@ -1,0 +1,81 @@
+[package]
+license = "Apache-2.0"
+name    = "terminal"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "lu_v2"
+path = "src/main.rs"
+
+[[bin]]
+name = "audit_brain"
+path = "src/audit_brain.rs"
+
+[[bin]]
+name = "test_brain"
+path = "src/test_brain.rs"
+
+[[bin]]
+name = "lu_v2_phase3"
+path = "src/test_phase3.rs"
+
+[[bin]]
+name = "lu_v2_phase4"
+path = "src/test_phase4.rs"
+
+[[bin]]
+name = "lu_v2_phase5"
+path = "src/test_phase5.rs"
+
+[[bin]]
+name = "lu_v2_phase6"
+path = "src/test_phase6.rs"
+
+[[bin]]
+name = "lu_quality_bench"
+path = "src/benchmark.rs"
+
+[[bin]]
+name = "test_gaps"
+path = "src/test_gaps.rs"
+
+[[bin]]
+name = "test_integration"
+path = "src/test_integration.rs"
+
+[[bin]]
+name = "test_cleanup"
+path = "src/test_cleanup.rs"
+
+[[bin]]
+name = "test_web"
+path = "src/test_web.rs"
+
+[[bin]]
+name = "test_remaining"
+path = "src/test_remaining.rs"
+
+[[bin]]
+name = "test_quality"
+path = "src/test_quality.rs"
+
+[[bin]]
+name = "clean_and_bond"
+path = "src/clean_and_bond.rs"
+
+[[bin]]
+name = "migrate_bonds"
+path = "src/migrate_bonds.rs"
+
+[dependencies]
+brain      = { path = "../brain" }
+graph      = { path = "../graph" }
+embedding  = { path = "../embedding" }
+encryption = { path = "../encryption" }
+mcp_server = { path = "../mcp_server" }
+df_core    = { path = "../df_core" }
+serde_json = { workspace = true }
+tokio      = { workspace = true }
+anyhow     = { workspace = true }
+image      = { workspace = true }

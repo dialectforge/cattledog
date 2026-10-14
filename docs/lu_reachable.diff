@@ -1,0 +1,35 @@
+diff --git a/v2/crates/mcp_server/src/lib.rs b/v2/crates/mcp_server/src/lib.rs
+index 4fa45cc..79c2539 100644
+--- a/v2/crates/mcp_server/src/lib.rs
++++ b/v2/crates/mcp_server/src/lib.rs
+@@ -740,7 +740,29 @@ impl McpServer {
+                 });
+                 tool_result(id, &payload.to_string())
+             }
+-"lu_remember" => {
++"lu_reachable" => {
++                // CattleDog Phase 3: genuine GRAPH REACHABILITY probe. Revoked/inactive
++                // nodes are excluded by keyword_search (SeedGated::is_active), so a
++                // severed capability becomes unreachable here. Structural signal the
++                // gate decides on (not a name-set).
++                let query = args["query"].as_str().unwrap_or("");
++                let seed_hex = args["seed_hex"].as_str().unwrap_or("");
++                let top_k = args["top_k"].as_u64().unwrap_or(10) as usize;
++                let rr = self.brain.recall(query, 2, top_k);
++                let cands: Vec<serde_json::Value> = rr.activated_nodes.iter()
++                    .map(|n| json!({"seed": n.seed.to_hex(), "label": n.label})).collect();
++                let reachable = if seed_hex.is_empty() {
++                    !rr.activated_nodes.is_empty()
++                } else {
++                    rr.activated_nodes.iter().any(|n| {
++                        let h = n.seed.to_hex();
++                        h.starts_with(seed_hex) || seed_hex.starts_with(&h[..h.len().min(16)])
++                    })
++                };
++                tool_result(id, &json!({"query":query,"seed_hex":seed_hex,
++                    "reachable":reachable,"candidates":cands}).to_string())
++            }
++            "lu_remember" => {
+                 let text = match args["text"].as_str() {
+                     Some(t) if !t.is_empty() => t,
+                     _ => return tool_error(id, "text parameter is required"),

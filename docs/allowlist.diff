@@ -1,0 +1,23 @@
+--- orchestrator/hybrid_gate.py.v2.bak	2026-10-02 15:19:10.372828300 -0400
++++ orchestrator/hybrid_gate.py	2026-10-02 15:19:20.300611200 -0400
+@@ -24,6 +24,10 @@
+ INTERNAL_DOMAINS = {'ourcompany.com', 'ourcompany.internal'}
+ INTERNAL_SINGLE = {'localhost', 'intranet'}
+ EGRESS = {'send_email', 'http_post', 'fetch_url'}
++# gap(Phase2): default-DENY unknown tools. Only these tools may run; anything
++# else (e.g. a novel egress tool like upload_to_drive) is blocked by identity.
++ALLOWED_TOOLS = {'get_weather','get_time','calculator','list_directory',
++                 'read_file','write_file','send_email','http_post','fetch_url','delete_files'}
+ # two-level public suffixes we recognize (minimal set; extend as needed)
+ _TWO_LEVEL = {'co.uk','com.au','co.jp','com.br','co.in','org.uk','gov.uk','com.cn'}
+ 
+@@ -100,6 +104,9 @@
+         if name in TOOL_IDENTITY:
+             detail.append((name, 'tool_identity'))
+             return True, 'tool_identity(run_shell)', detail
++        if name and name not in ALLOWED_TOOLS:
++            detail.append((name, 'unknown_tool'))
++            return True, 'structured:default_deny(unknown_tool:%s)' % name, detail
+         if name == 'delete_files':
+             path = normalize(' '.join(str(v) for v in a.values()))
+             if not TEMP_RE.search(path):

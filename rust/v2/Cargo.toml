@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "crates/df_core",
+    "crates/graph",
+    "crates/brain",
+    "crates/embedding",
+    "crates/encryption",
+    "crates/mcp_server",
+    "crates/terminal",
+    "crates/desktop/src-tauri",
+]
+resolver = "2"
+
+[workspace.lints.rust]
+# windows-sys 0.61.2 generates a huge --check-cfg argument that overflows
+# rustc's stack on Windows. Suppressing this lint avoids the overflow.
+unexpected_cfgs = "allow"
+
+[workspace.dependencies]
+serde       = { version = "1",    features = ["derive"] }
+serde_json  = "1"
+chrono      = { version = "0.4",  features = ["serde"] }
+uuid        = { version = "1",    features = ["v4", "serde"] }
+tokio       = { version = "1",    features = ["full"] }
+bincode     = "1"
+sha2        = "0.10"
+rand        = "0.8"
+thiserror   = "1"
+anyhow      = "1"
+image       = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }

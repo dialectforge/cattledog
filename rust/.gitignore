@@ -1,0 +1,71 @@
+/target
+/target_new
+/target_test
+/brain
+/v2/brain
+debug_output*.txt
+*.pyc
+__pycache__
+
+# Brain data files (large binary state)
+*.lbr
+*.brain
+brain_state.bin
+
+# Large media files
+*.mp4
+
+# Generated output / log files
+*.log
+build_stdout.txt
+build_stderr.txt
+lu_debug.log
+tools/library.db
+tools/*.txt
+tools/*.json
+tools/trainer/
+v2/tools/*.txt
+v2/tools/*.json
+v2/tools/*.log
+v2/tools/*.csv
+
+# Generated HTML browsers
+lu_codebase_browser.html
+v2_codebase_browser.html
+
+# Worktree and clone directories
+/.claude/worktrees/
+/.clone/
+v2/.claude/
+
+# --- Secrets: never commit ---
+.env
+.env.*
+*.env
+*.p8
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+*.pem
+*.key
+keys/
+secrets/
+
+# Build / OS artifacts
+target/
+build/
+node_modules/
+__pycache__/
+*.pyc
+*.o
+DerivedData/
+xcuserdata/
+.DS_Store
+*.mp4
+*.lbr
+
+# Model weights
+v2/models/
+*.onnx
+*.safetensors

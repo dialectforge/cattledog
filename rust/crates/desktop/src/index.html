@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lu AI — Desktop</title>
+
+<!-- Tailwind CSS 4 from CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/4.1.3/tailwind.min.css" crossorigin="anonymous">
+
+<!-- Import map for ES modules -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19?dev",
+    "react-dom": "https://esm.sh/react-dom@19?dev",
+    "react-dom/client": "https://esm.sh/react-dom@19/client?dev",
+    "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime?dev",
+    "lucide-react": "https://esm.sh/lucide-react@0.469.0?external=react"
+  }
+}
+</script>
+
+<style>
+  /* ─── Base Theme ──────────────────────────────────── */
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #111118;
+    --bg-surface: #1a1a24;
+    --bg-surface-hover: #22222e;
+    --border: #2a2a35;
+    --border-bright: #3a3a48;
+    --text-primary: #e8e8ed;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6a6a7a;
+    --accent: #7c9aff;
+    --accent-dim: #5a78dd;
+    --accent-bg: rgba(124, 154, 255, 0.1);
+    --success: #4ecdc4;
+    --warning: #ffd93d;
+    --danger: #ff6b6b;
+    --user-bubble: #2a3a6a;
+    --lu-bubble: #1e1e2a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ─── Scrollbars ─────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+  /* ─── Animations ─────────────────────────────────── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes pulse-dot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes slideInLeft {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  .fade-in { animation: fadeIn 0.3s ease-out; }
+  .slide-in-left { animation: slideInLeft 0.25s ease-out; }
+  .slide-in-right { animation: slideInRight 0.25s ease-out; }
+
+  .shimmer-bg {
+    background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-hover) 50%, var(--bg-surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  .thinking-dots span {
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin: 0 2px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse-dot 1.4s ease-in-out infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  /* ─── Layout ─────────────────────────────────────── */
+  #app { height: 100vh; display: flex; flex-direction: column; }
+
+  .sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transition: margin-left 0.25s ease, min-width 0.25s ease, width 0.25s ease;
+  }
+  .sidebar.collapsed {
+    margin-left: -280px;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+  }
+
+  .right-panel {
+    width: 350px;
+    min-width: 350px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transition: margin-right 0.25s ease, min-width 0.25s ease, width 0.25s ease;
+  }
+  .right-panel.collapsed {
+    margin-right: -350px;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+  }
+
+  .tab-bar {
+    height: 42px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 2px;
+  }
+
+  .tab-btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: all 0.15s ease;
+  }
+  .tab-btn:hover { color: var(--text-secondary); background: var(--bg-surface); }
+  .tab-btn.active { color: var(--accent); background: var(--accent-bg); }
+
+  /* ─── Chat ───────────────────────────────────────── */
+  .message-user {
+    background: var(--user-bubble);
+    border-radius: 16px 16px 4px 16px;
+    margin-left: auto;
+    max-width: 75%;
+  }
+  .message-lu {
+    background: var(--lu-bubble);
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 16px 4px;
+    max-width: 85%;
+  }
+
+  .chat-input {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 12px;
+    padding: 12px 48px 12px 16px;
+    font-size: 14px;
+    outline: none;
+    width: 100%;
+    resize: none;
+    font-family: inherit;
+    line-height: 1.5;
+  }
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-input::placeholder { color: var(--text-muted); }
+
+  .send-btn {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+  }
+  .send-btn:hover { background: var(--accent-dim); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ─── Code Blocks ────────────────────────────────── */
+  .message-content pre {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .message-content code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--bg-primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  /* ─── Proposal Cards ─────────────────────────────── */
+  .proposal-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    transition: border-color 0.15s ease;
+  }
+  .proposal-card:hover { border-color: var(--border-bright); }
+
+  /* ─── Stat Cards ─────────────────────────────────── */
+  .stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ─── Toggle Switch ──────────────────────────────── */
+  .toggle-track {
+    width: 40px; height: 22px;
+    border-radius: 11px;
+    background: var(--border);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s ease;
+  }
+  .toggle-track.on { background: var(--accent); }
+  .toggle-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: white;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: left 0.2s ease;
+  }
+  .toggle-track.on .toggle-thumb { left: 20px; }
+
+  /* ─── Drop Zone ──────────────────────────────────── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  /* ─── Session List ───────────────────────────────── */
+  .session-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    margin: 2px 8px;
+    transition: background 0.15s ease;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .session-item:hover { background: var(--bg-surface); }
+  .session-item.active { background: var(--accent-bg); color: var(--accent); }
+
+  /* ─── Graph Canvas ───────────────────────────────── */
+  #brain-map-canvas {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+  #brain-map-canvas:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
+import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
+import {
+  MessageSquare, GraduationCap, Network, Settings,
+  Send, ChevronLeft, ChevronRight, Plus, Trash2,
+  Check, X, Upload, Brain, Activity, Zap, Shield,
+  Search, Moon, Sun, BarChart3, AlertTriangle,
+  FileText, Sparkles, Eye, PanelLeftClose, PanelRightClose,
+} from 'lucide-react';
+
+// ─── API Client ─────────────────────────────────────
+const API = {
+  async chat(message, conversationId) {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, conversation_id: conversationId || undefined }),
+    });
+    return r.json();
+  },
+  async listConversations() {
+    const r = await fetch('/api/conversations');
+    return r.json();
+  },
+  async createConversation(name) {
+    const r = await fetch('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    return r.json();
+  },
+  async getConversation(id) {
+    const r = await fetch(`/api/conversations/${id}`);
+    return r.json();
+  },
+  async renameConversation(id, name) {
+    const r = await fetch(`/api/conversations/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    return r.json();
+  },
+  async deleteConversation(id) {
+    const r = await fetch(`/api/conversations/${id}`, {
+      method: 'DELETE',
+    });
+    return r.json();
+  },
+  async stats() {
+    const r = await fetch('/api/stats');
+    return r.json();
+  },
+  async proposals() {
+    const r = await fetch('/api/proposals');
+    return r.json();
+  },
+  async approve(id) {
+    const r = await fetch(`/api/approve/${id}`, { method: 'POST' });
+    return r.json();
+  },
+  async reject(id) {
+    const r = await fetch(`/api/reject/${id}`, { method: 'POST' });
+    return r.json();
+  },
+  async ingest(text, source) {
+    const r = await fetch('/api/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, source }),
+    });
+    return r.json();
+  },
+  async graph() {
+    const r = await fetch('/api/graph');
+    return r.json();
+  },
+  async scars() {
+    const r = await fetch('/api/scars');
+    return r.json();
+  },
+  async learn(content) {
+    const r = await fetch('/api/learn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    return r.json();
+  },
+  async propose(content, source) {
+    const r = await fetch('/api/propose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, source }),
+    });
+    return r.json();
+  },
+};
+
+// ─── Helpers ────────────────────────────────────────
+function formatContent(text) {
+  if (!text) return '';
+  // Simple markdown: code blocks, inline code, bold, line breaks
+  let html = text
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+  return html;
+}
+
+function Icon({ icon: IconComp, size = 16, ...props }) {
+  return jsx(IconComp, { size, ...props });
+}
+
+// ─── Sidebar ────────────────────────────────────────
+function Sidebar({ sessions, activeSession, onSelect, onNew, onDelete, stats, collapsed }) {
+  return jsx('div', {
+    className: `sidebar ${collapsed ? 'collapsed' : ''}`,
+    children: jsxs(Fragment, { children: [
+      // Header
+      jsxs('div', {
+        style: { padding: '16px', borderBottom: '1px solid var(--border)' },
+        children: [
+          jsxs('div', {
+            style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' },
+            children: [
+              jsx('div', {
+                style: {
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--accent), #a78bfa)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                },
+                children: jsx(Icon, { icon: Brain, size: 18, color: 'white' }),
+              }),
+              jsxs('div', { children: [
+                jsx('div', { style: { fontWeight: 600, fontSize: '15px' }, children: 'Lu AI' }),
+                jsx('div', { style: { fontSize: '11px', color: 'var(--text-muted)' }, children: 'DialectForge Intelligence' }),
+              ]}),
+            ],
+          }),
+          // Stats strip
+          stats && jsxs('div', {
+            style: { display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)' },
+            children: [
+              jsxs('span', { children: [jsx('span', { style: { color: 'var(--success)' }, children: stats.active_nodes }), ' nodes'] }),
+              jsxs('span', { children: [jsx('span', { style: { color: 'var(--accent)' }, children: stats.active_bonds }), ' bonds'] }),
+              stats.scars > 0 && jsxs('span', { children: [jsx('span', { style: { color: 'var(--danger)' }, children: stats.scars }), ' scars'] }),
+            ],
+          }),
+        ],
+      }),
+      // New Chat button
+      jsx('div', {
+        style: { padding: '8px' },
+        children: jsx('button', {
+          onClick: onNew,
+          style: {
+            width: '100%', padding: '8px', borderRadius: '8px',
+            background: 'var(--accent-bg)', border: '1px solid var(--accent)',
+            color: 'var(--accent)', cursor: 'pointer', fontSize: '13px',
+            fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          },
+          children: [jsx(Icon, { icon: Plus, size: 14 }), 'New Chat'],
+        }),
+      }),
+      // Sessions
+      jsx('div', {
+        style: { flex: 1, overflowY: 'auto', paddingTop: '4px' },
+        children: sessions.map((s, i) =>
+          jsxs('div', {
+            key: i,
+            className: `session-item ${i === activeSession ? 'active' : ''}`,
+            onClick: () => onSelect(i),
+            children: [
+              jsx('div', { style: { fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: s.title || 'New Chat' }),
+              jsx('div', { style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }, children: `${s.messageCount || s.messages?.length || 0} messages` }),
+            ],
+          })
+        ),
+      }),
+    ]}),
+  });
+}
+
+// ─── Chat Tab ───────────────────────────────────────
+function ChatTab({ session, onSend }) {
+  const [input, setInput] = useState('');
+  const [thinking, setThinking] = useState(false);
+  const messagesRef = useRef(null);
+
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [session.messages, thinking]);
+
+  async function handleSend() {
+    const msg = input.trim();
+    if (!msg || thinking) return;
+    setInput('');
+    setThinking(true);
+    try {
+      await onSend(msg);
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  return jsxs('div', {
+    style: { display: 'flex', flexDirection: 'column', height: '100%' },
+    children: [
+      // Messages area
+      jsx('div', {
+        ref: messagesRef,
+        style: { flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' },
+        children: [
+          session.messages.length === 0 && jsx('div', {
+            style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px', color: 'var(--text-muted)' },
+            children: [
+              jsx(Icon, { icon: Brain, size: 48, strokeWidth: 1 }),
+              jsx('div', { style: { fontSize: '18px', fontWeight: 500 }, children: 'Talk to Lu' }),
+              jsx('div', { style: { fontSize: '13px' }, children: 'Knowledge flows through DialectForge spreading activation' }),
+            ],
+          }),
+          ...session.messages.map((m, i) =>
+            jsx('div', {
+              key: i,
+              className: 'fade-in',
+              style: { display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' },
+              children: jsxs('div', {
+                className: m.role === 'user' ? 'message-user' : 'message-lu',
+                style: { padding: '12px 16px' },
+                children: [
+                  jsx('div', {
+                    className: 'message-content',
+                    style: { fontSize: '14px', lineHeight: '1.6' },
+                    dangerouslySetInnerHTML: { __html: formatContent(m.text) },
+                  }),
+                  m.meta && jsxs('div', {
+                    style: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', display: 'flex', gap: '12px' },
+                    children: [
+                      m.meta.atoms_used && jsxs('span', { children: [m.meta.atoms_used, ' atoms'] }),
+                      m.meta.coherence_score != null && jsxs('span', { children: [Math.round(m.meta.coherence_score * 100), '% coherence'] }),
+                    ],
+                  }),
+                  m.meta?.scar_warnings?.length > 0 && jsx('div', {
+                    style: { fontSize: '12px', color: 'var(--warning)', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' },
+                    children: [jsx(Icon, { icon: AlertTriangle, size: 12 }), m.meta.scar_warnings.join(', ')],
+                  }),
+                ],
+              }),
+            })
+          ),
+          thinking && jsx('div', {
+            className: 'fade-in',
+            style: { display: 'flex', alignItems: 'flex-start' },
+            children: jsx('div', {
+              className: 'message-lu shimmer-bg',
+              style: { padding: '14px 20px', minWidth: '80px' },
+              children: jsxs('div', {
+                className: 'thinking-dots',
+                children: [jsx('span', {}), jsx('span', {}), jsx('span', {})],
+              }),
+            }),
+          }),
+        ],
+      }),
+      // Input area
+      jsx('div', {
+        style: { padding: '12px 20px 16px', borderTop: '1px solid var(--border)' },
+        children: jsx('div', {
+          style: { position: 'relative' },
+          children: [
+            jsx('textarea', {
+              className: 'chat-input',
+              rows: 1,
+              value: input,
+              onChange: e => setInput(e.target.value),
+              onKeyDown: handleKeyDown,
+              placeholder: 'Message Lu...',
+              disabled: thinking,
+            }),
+            jsx('button', {
+              className: 'send-btn',
+              onClick: handleSend,
+              disabled: !input.trim() || thinking,
+              children: jsx(Icon, { icon: Send, size: 16, color: 'white' }),
+            }),
+          ],
+        }),
+      }),
+    ],
+  });
+}
+
+// ─── Chat Right Panel (Sources) ─────────────────────
+function ChatRightPanel({ session }) {
+  const lastLuMsg = [...session.messages].reverse().find(m => m.role === 'lu');
+  if (!lastLuMsg?.meta?.sources?.length) {
+    return jsx('div', {
+      style: { padding: '20px', color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', marginTop: '40px' },
+      children: [
+        jsx(Icon, { icon: Eye, size: 32, strokeWidth: 1, style: { margin: '0 auto 12px', display: 'block', opacity: 0.4 } }),
+        'Sources and context will appear here during conversation.',
+      ],
+    });
+  }
+
+  return jsxs('div', {
+    style: { padding: '16px', overflowY: 'auto', height: '100%' },
+    children: [
+      jsx('div', { style: { fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }, children: 'Sources' }),
+      ...lastLuMsg.meta.sources.map((s, i) =>
+        jsxs('div', {
+          key: i,
+          style: { padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: '8px', marginBottom: '8px', fontSize: '13px' },
+          children: [
+            jsx('div', { style: { color: 'var(--text-primary)', marginBottom: '4px' }, children: s.label }),
+            jsxs('div', { style: { fontSize: '11px', color: 'var(--text-muted)' }, children: [
+              Math.round(s.contribution * 100), '% contribution',
+            ]}),
+          ],
+        })
+      ),
+    ],
+  });
+}
+
+// ─── Trainer Tab ────────────────────────────────────
+function TrainerTab({ proposals, onApprove, onReject, onIngest }) {
+  const [dragOver, setDragOver] = useState(false);
+  const [ingestResult, setIngestResult] = useState(null);
+  const [textInput, setTextInput] = useState('');
+  const fileRef = useRef(null);
+
+  async function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const files = e.dataTransfer?.files;
+    if (files?.length > 0) {
+      const file = files[0];
+      const text = await file.text();
+      const result = await onIngest(text, file.name);
+      setIngestResult(result);
+    }
+  }
+
+  async function handleTextIngest() {
+    if (!textInput.trim()) return;
+    const result = await onIngest(textInput, 'manual-input');
+    setIngestResult(result);
+    setTextInput('');
+  }
+
+  return jsx('div', {
+    style: { height: '100%', overflowY: 'auto', padding: '20px' },
+    children: jsxs('div', {
+      style: { maxWidth: '800px', margin: '0 auto' },
+      children: [
+        // Drop zone
+        jsx('div', {
+          className: `drop-zone ${dragOver ? 'dragover' : ''}`,
+          onDragOver: e => { e.preventDefault(); setDragOver(true); },
+          onDragLeave: () => setDragOver(false),
+          onDrop: handleDrop,
+          onClick: () => fileRef.current?.click(),
+          children: jsxs('div', { children: [
+            jsx(Icon, { icon: Upload, size: 40, color: 'var(--text-muted)', style: { margin: '0 auto 12px', display: 'block' } }),
+            jsx('div', { style: { fontSize: '15px', fontWeight: 500, marginBottom: '4px' }, children: 'Drop files here to train Lu' }),
+            jsx('div', { style: { fontSize: '13px', color: 'var(--text-muted)' }, children: 'Supports .txt, .pdf, .md, .json' }),
+            jsx('input', { ref: fileRef, type: 'file', style: { display: 'none' }, onChange: async e => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const text = await file.text();
+                const result = await onIngest(text, file.name);
+                setIngestResult(result);
+              }
+            }}),
+          ]}),
+        }),
+
+        // Manual text input
+        jsxs('div', {
+          style: { marginTop: '20px', display: 'flex', gap: '8px' },
+          children: [
+            jsx('textarea', {
+              className: 'chat-input',
+              rows: 2,
+              value: textInput,
+              onChange: e => setTextInput(e.target.value),
+              placeholder: 'Or paste text to ingest...',
+              style: { flex: 1 },
+            }),
+            jsx('button', {
+              onClick: handleTextIngest,
+              disabled: !textInput.trim(),
+              style: {
+                padding: '8px 20px', borderRadius: '8px', background: 'var(--accent)',
+                color: 'white', border: 'none', cursor: 'pointer', fontWeight: 500, fontSize: '13px',
+                alignSelf: 'flex-end', opacity: textInput.trim() ? 1 : 0.4,
+              },
+              children: 'Ingest',
+            }),
+          ],
+        }),
+
+        // Ingest result
+        ingestResult && jsxs('div', {
+          className: 'fade-in',
+          style: { marginTop: '16px', padding: '14px', background: 'var(--bg-surface)', borderRadius: '10px', border: '1px solid var(--border)' },
+          children: [
+            jsx('div', { style: { fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--success)' }, children: 'Ingestion Complete' }),
+            jsxs('div', { style: { fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '16px' }, children: [
+              jsxs('span', { children: ['Sentences: ', ingestResult.total_sentences] }),
+              jsxs('span', { children: ['Ready: ', ingestResult.proposals_ready] }),
+              jsxs('span', { children: ['Blocked: ', ingestResult.proposals_blocked] }),
+              jsxs('span', { children: ['Duplicates: ', ingestResult.duplicates_skipped] }),
+            ]}),
+          ],
+        }),
+
+        // Proposals
+        proposals.length > 0 && jsxs('div', {
+          style: { marginTop: '24px' },
+          children: [
+            jsx('div', { style: { fontSize: '14px', fontWeight: 600, marginBottom: '12px' }, children: `Pending Proposals (${proposals.length})` }),
+            ...proposals.map((p, i) =>
+              jsxs('div', {
+                key: p.id || i,
+                className: 'proposal-card fade-in',
+                style: { marginBottom: '10px' },
+                children: [
+                  jsx('div', { style: { fontSize: '13px', lineHeight: 1.5, marginBottom: '8px' }, children: p.content }),
+                  p.scar_conflicts?.length > 0 && jsxs('div', {
+                    style: { fontSize: '12px', color: 'var(--warning)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' },
+                    children: [jsx(Icon, { icon: AlertTriangle, size: 12 }), `Scar conflict: ${p.scar_conflicts.join(', ')}`],
+                  }),
+                  p.similar_existing?.length > 0 && jsx('div', {
+                    style: { fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' },
+                    children: `Similar: ${p.similar_existing.map(s => s.label || s).join(', ')}`,
+                  }),
+                  jsxs('div', {
+                    style: { display: 'flex', gap: '8px' },
+                    children: [
+                      jsxs('button', {
+                        onClick: () => onApprove(p.id),
+                        style: { padding: '4px 14px', borderRadius: '6px', background: 'var(--success)', color: '#000', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' },
+                        children: [jsx(Icon, { icon: Check, size: 12 }), 'Approve'],
+                      }),
+                      jsxs('button', {
+                        onClick: () => onReject(p.id),
+                        style: { padding: '4px 14px', borderRadius: '6px', background: 'var(--danger)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' },
+                        children: [jsx(Icon, { icon: X, size: 12 }), 'Reject'],
+                      }),
+                    ],
+                  }),
+                ],
+              })
+            ),
+          ],
+        }),
+      ],
+    }),
+  });
+}
+
+// ─── Brain Map Tab ──────────────────────────────────
+function BrainMapTab() {
+  const canvasRef = useRef(null);
+  const stateRef = useRef({
+    nodes: [], bonds: [], visibleNodes: [], visibleBonds: [],
+    transform: { x: 0, y: 0, k: 1 },
+    hoveredNode: null, isDragging: false, dragStart: { x: 0, y: 0 },
+    simAlpha: 1.0, simRunning: false,
+    searchTerm: '', totalNodes: 0, totalBonds: 0,
+  });
+  const [searchInput, setSearchInput] = useState('');
+  const [info, setInfo] = useState({ nodes: 0, bonds: 0, visible: 0 });
+  const [hoveredInfo, setHoveredInfo] = useState(null);
+  const animRef = useRef(null);
+
+  const MAX_VISIBLE = 500;
+  const MAX_BONDS = 1200;
+
+  function nodeColor(node) {
+    if (node.highlighted) return '#ffd93d';
+    const b = node.bondCount || 0;
+    if (b >= 8) return '#4ecdc4';
+    if (b >= 3) return '#7c9aff';
+    return '#ff6b6b';
+  }
+
+  function nodeRadius(node) {
+    return 3 + Math.min((node.bondCount || 0) * 0.3, 4);
+  }
+
+  function filterAndLayout() {
+    const st = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let visible;
+    if (st.searchTerm) {
+      const matched = new Set();
+      for (const n of st.nodes) {
+        n.highlighted = false;
+        if (n.label.toLowerCase().includes(st.searchTerm)) {
+          matched.add(n.id); n.highlighted = true;
+        }
+      }
+      const expanded = new Set(matched);
+      for (const b of st.bonds) {
+        if (matched.has(b.source)) expanded.add(b.target);
+        if (matched.has(b.target)) expanded.add(b.source);
+      }
+      visible = st.nodes.filter(n => expanded.has(n.id)).slice(0, MAX_VISIBLE);
+    } else {
+      const sorted = [...st.nodes].sort((a, b) => (b.bondCount || 0) - (a.bondCount || 0));
+      const topSet = new Set(sorted.slice(0, 350).map(n => n.id));
+      const rest = st.nodes.filter(n => !topSet.has(n.id));
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+      }
+      visible = [...sorted.slice(0, 350), ...rest.slice(0, 150)];
+      for (const n of visible) n.highlighted = false;
+    }
+
+    st.visibleNodes = visible;
+    const vs = new Set(visible.map(n => n.id));
+    st.visibleBonds = st.bonds.filter(b => vs.has(b.source) && vs.has(b.target)).slice(0, MAX_BONDS);
+
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    for (const n of st.visibleNodes) {
+      if (!isFinite(n.x)) {
+        n.x = cx + (Math.random() - 0.5) * canvas.width * 1.4;
+        n.y = cy + (Math.random() - 0.5) * canvas.height * 1.4;
+      }
+      n.vx = 0; n.vy = 0;
+    }
+    st.simAlpha = 0.8;
+    st.simRunning = true;
+
+    setInfo({ nodes: st.totalNodes, bonds: st.totalBonds, visible: visible.length });
+  }
+
+  function simStep() {
+    const st = stateRef.current;
+    if (st.simAlpha < 0.001) { st.simRunning = false; return; }
+    st.simAlpha *= 0.992;
+    const cnt = st.visibleNodes.length;
+    if (!cnt) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const nodeMap = {};
+    for (const n of st.visibleNodes) nodeMap[n.id] = n;
+
+    const REP = 600 * st.simAlpha;
+    const samples = Math.min(60, cnt - 1);
+    for (let i = 0; i < cnt; i++) {
+      const a = st.visibleNodes[i];
+      for (let s = 0; s < samples; s++) {
+        const j = Math.floor(Math.random() * cnt);
+        if (j === i) continue;
+        const b = st.visibleNodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d2 = Math.max(dx * dx + dy * dy, 400);
+        const d = Math.sqrt(d2);
+        const f = REP * (cnt / samples) / d2;
+        const fx = (dx / d) * f, fy = (dy / d) * f;
+        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+      }
+    }
+
+    const SPR = 0.0008 * st.simAlpha;
+    for (const bond of st.visibleBonds) {
+      const a = nodeMap[bond.source], t = nodeMap[bond.target];
+      if (!a || !t) continue;
+      const dx = t.x - a.x, dy = t.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (d > 180) {
+        const f = (d - 180) * SPR;
+        const fx = (dx / d) * f, fy = (dy / d) * f;
+        a.vx += fx; a.vy += fy; t.vx -= fx; t.vy -= fy;
+      }
+    }
+
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    for (const a of st.visibleNodes) {
+      a.vx += (cx - a.x) * 0.0003; a.vy += (cy - a.y) * 0.0003;
+      a.vx *= 0.82; a.vy *= 0.82;
+      const v = Math.sqrt(a.vx * a.vx + a.vy * a.vy);
+      if (v > 12) { a.vx *= 12 / v; a.vy *= 12 / v; }
+      a.x += a.vx; a.y += a.vy;
+      if (!isFinite(a.x)) { a.x = cx + Math.random() * 10; a.y = cy + Math.random() * 10; a.vx = 0; a.vy = 0; }
+    }
+  }
+
+  function draw() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const st = stateRef.current;
+
+    if (st.simRunning) simStep();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(st.transform.x, st.transform.y);
+    ctx.scale(st.transform.k, st.transform.k);
+
+    const nodeMap = {};
+    for (const n of st.visibleNodes) nodeMap[n.id] = n;
+
+    ctx.strokeStyle = 'rgba(100, 120, 180, 0.06)';
+    ctx.lineWidth = 0.5 / st.transform.k;
+    ctx.beginPath();
+    for (const b of st.visibleBonds) {
+      const a = nodeMap[b.source], t = nodeMap[b.target];
+      if (a && t) { ctx.moveTo(a.x, a.y); ctx.lineTo(t.x, t.y); }
+    }
+    ctx.stroke();
+
+    for (const n of st.visibleNodes) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, nodeRadius(n), 0, Math.PI * 2);
+      ctx.fillStyle = nodeColor(n);
+      ctx.fill();
+    }
+
+    if (st.hoveredNode) {
+      const h = st.hoveredNode;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, nodeRadius(h) + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5 / st.transform.k;
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(124, 154, 255, 0.5)';
+      ctx.lineWidth = 1 / st.transform.k;
+      ctx.beginPath();
+      for (const b of st.visibleBonds) {
+        if (b.source === h.id || b.target === h.id) {
+          const a = nodeMap[b.source], t = nodeMap[b.target];
+          if (a && t) { ctx.moveTo(a.x, a.y); ctx.lineTo(t.x, t.y); }
+        }
+      }
+      ctx.stroke();
+    }
+
+    ctx.restore();
+    animRef.current = requestAnimationFrame(draw);
+  }
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Mouse handlers
+    function onWheel(e) {
+      e.preventDefault();
+      const st = stateRef.current;
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      st.transform.x = mx - (mx - st.transform.x) * factor;
+      st.transform.y = my - (my - st.transform.y) * factor;
+      st.transform.k *= factor;
+    }
+    function onMouseDown(e) {
+      const st = stateRef.current;
+      const rect = canvas.getBoundingClientRect();
+      st.isDragging = true;
+      st.dragStart = { x: e.clientX - rect.left - st.transform.x, y: e.clientY - rect.top - st.transform.y };
+    }
+    function onMouseMove(e) {
+      const st = stateRef.current;
+      const rect = canvas.getBoundingClientRect();
+      if (st.isDragging) {
+        st.transform.x = e.clientX - rect.left - st.dragStart.x;
+        st.transform.y = e.clientY - rect.top - st.dragStart.y;
+        return;
+      }
+      const wx = (e.clientX - rect.left - st.transform.x) / st.transform.k;
+      const wy = (e.clientY - rect.top - st.transform.y) / st.transform.k;
+      st.hoveredNode = null;
+      for (const n of st.visibleNodes) {
+        const dx = n.x - wx, dy = n.y - wy;
+        const r = nodeRadius(n) + 2;
+        if (dx * dx + dy * dy < (r * r) / (st.transform.k * st.transform.k) * 4) {
+          st.hoveredNode = n;
+          setHoveredInfo({ label: n.label, id: n.id, bondCount: n.bondCount, confidence: n.confidence });
+          return;
+        }
+      }
+      setHoveredInfo(null);
+    }
+    function onMouseUp() { stateRef.current.isDragging = false; }
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mouseleave', onMouseUp);
+
+    // Load data
+    API.graph().then(data => {
+      const st = stateRef.current;
+      st.nodes = data.nodes || [];
+      st.bonds = data.bonds || [];
+      st.totalNodes = data.total_nodes || st.nodes.length;
+      st.totalBonds = data.total_bonds || st.bonds.length;
+      filterAndLayout();
+    });
+
+    animRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mouseleave', onMouseUp);
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+  }, []);
+
+  function handleSearch(e) {
+    if (e.key === 'Enter') {
+      stateRef.current.searchTerm = searchInput.toLowerCase().trim();
+      filterAndLayout();
+    }
+  }
+
+  return jsxs('div', {
+    style: { height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' },
+    children: [
+      // Map toolbar
+      jsxs('div', {
+        style: { height: '42px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 16px', gap: '16px' },
+        children: [
+          jsx('input', {
+            type: 'text',
+            value: searchInput,
+            onChange: e => setSearchInput(e.target.value),
+            onKeyDown: handleSearch,
+            placeholder: 'Search nodes... (Enter)',
+            style: {
+              background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-primary)',
+              padding: '5px 12px', borderRadius: '6px', fontSize: '12px', outline: 'none', width: '220px',
+            },
+          }),
+          jsxs('div', {
+            style: { fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '14px' },
+            children: [
+              jsxs('span', { children: ['Nodes: ', jsx('span', { style: { color: 'var(--text-secondary)' }, children: info.nodes })] }),
+              jsxs('span', { children: ['Bonds: ', jsx('span', { style: { color: 'var(--text-secondary)' }, children: info.bonds })] }),
+              jsxs('span', { children: ['Showing: ', jsx('span', { style: { color: 'var(--text-secondary)' }, children: info.visible })] }),
+            ],
+          }),
+        ],
+      }),
+      // Canvas
+      jsx('div', {
+        style: { flex: 1, position: 'relative' },
+        children: [
+          jsx('canvas', { ref: canvasRef, id: 'brain-map-canvas' }),
+          // Hover tooltip
+          hoveredInfo && jsx('div', {
+            style: {
+              position: 'absolute', bottom: '16px', left: '16px',
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '10px 14px', fontSize: '12px',
+              maxWidth: '350px', pointerEvents: 'none',
+            },
+            children: jsxs('div', { children: [
+              jsx('div', { style: { fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }, children: hoveredInfo.label }),
+              jsx('div', { style: { color: 'var(--text-muted)' }, children: `Bonds: ${hoveredInfo.bondCount || 0} | ${hoveredInfo.confidence || 'unknown'} | ${hoveredInfo.id?.slice(0, 16)}...` }),
+            ]}),
+          }),
+          // Legend
+          jsx('div', {
+            style: {
+              position: 'absolute', bottom: '16px', right: '16px',
+              background: 'rgba(17,17,24,0.85)', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '10px 14px', fontSize: '11px',
+            },
+            children: jsxs('div', { children: [
+              jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }, children: [jsx('span', { style: { width: 10, height: 10, borderRadius: '50%', background: '#4ecdc4', display: 'inline-block' } }), 'Hub (8+ bonds)'] }),
+              jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }, children: [jsx('span', { style: { width: 10, height: 10, borderRadius: '50%', background: '#7c9aff', display: 'inline-block' } }), 'Medium (3-7)'] }),
+              jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }, children: [jsx('span', { style: { width: 10, height: 10, borderRadius: '50%', background: '#ff6b6b', display: 'inline-block' } }), 'Leaf (<3)'] }),
+              jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' }, children: [jsx('span', { style: { width: 10, height: 10, borderRadius: '50%', background: '#ffd93d', display: 'inline-block' } }), 'Search match'] }),
+            ]}),
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// ─── Brain Map Right Panel ──────────────────────────
+function BrainMapRightPanel() {
+  const [scars, setScars] = useState([]);
+  useEffect(() => { API.scars().then(d => setScars(d.scars || [])).catch(() => {}); }, []);
+
+  return jsxs('div', {
+    style: { padding: '16px', overflowY: 'auto', height: '100%' },
+    children: [
+      jsx('div', { style: { fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }, children: 'Revocation Scars' }),
+      scars.length === 0 && jsx('div', { style: { fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '40px' }, children: 'No scars recorded.' }),
+      ...scars.map((s, i) =>
+        jsxs('div', {
+          key: i,
+          style: { padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: '8px', marginBottom: '8px', fontSize: '12px' },
+          children: [
+            jsx('div', { style: { color: 'var(--danger)', fontWeight: 600, marginBottom: '2px' }, children: s.label }),
+            jsx('div', { style: { color: 'var(--text-muted)' }, children: s.reason }),
+          ],
+        })
+      ),
+    ],
+  });
+}
+
+// ─── Settings Tab ───────────────────────────────────
+function SettingsTab({ stats }) {
+  // Settings are UI-only toggles for now (engine features don't exist on Brain yet)
+  const [toggles, setToggles] = useState({
+    curiosity: true,
+    invention: true,
+    selfImprovement: false,
+    idleExploration: false,
+    autoSave: true,
+  });
+
+  function Toggle({ label, desc, value, onChange }) {
+    return jsxs('div', {
+      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--border)' },
+      children: [
+        jsxs('div', { children: [
+          jsx('div', { style: { fontSize: '14px', fontWeight: 500 }, children: label }),
+          jsx('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }, children: desc }),
+        ]}),
+        jsx('div', {
+          className: `toggle-track ${value ? 'on' : ''}`,
+          onClick: () => onChange(!value),
+          children: jsx('div', { className: 'toggle-thumb' }),
+        }),
+      ],
+    });
+  }
+
+  return jsx('div', {
+    style: { height: '100%', overflowY: 'auto', padding: '20px' },
+    children: jsxs('div', {
+      style: { maxWidth: '700px', margin: '0 auto' },
+      children: [
+        // Stats dashboard
+        jsx('div', { style: { fontSize: '14px', fontWeight: 600, marginBottom: '16px' }, children: 'Brain Statistics' }),
+        stats && jsxs('div', {
+          style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' },
+          children: [
+            jsxs('div', { className: 'stat-card', children: [
+              jsx('div', { className: 'stat-value', children: stats.active_nodes }),
+              jsx('div', { className: 'stat-label', children: 'Active Nodes' }),
+            ]}),
+            jsxs('div', { className: 'stat-card', children: [
+              jsx('div', { className: 'stat-value', children: stats.active_bonds }),
+              jsx('div', { className: 'stat-label', children: 'Active Bonds' }),
+            ]}),
+            jsxs('div', { className: 'stat-card', children: [
+              jsx('div', { className: 'stat-value', style: { color: 'var(--danger)' }, children: stats.scars }),
+              jsx('div', { className: 'stat-label', children: 'Scars' }),
+            ]}),
+            jsxs('div', { className: 'stat-card', children: [
+              jsx('div', { className: 'stat-value', style: { color: 'var(--warning)' }, children: stats.revoked_nodes }),
+              jsx('div', { className: 'stat-label', children: 'Revoked' }),
+            ]}),
+          ],
+        }),
+
+        // Engine Toggles
+        jsx('div', { style: { fontSize: '14px', fontWeight: 600, marginBottom: '8px' }, children: 'Engine Controls' }),
+        jsx('div', { style: { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }, children: 'These control Lu\'s cognitive engines. Some are still in development.' }),
+        jsx(Toggle, { label: 'Curiosity Engine', desc: 'Detect knowledge gaps and generate wonder signals', value: toggles.curiosity, onChange: v => setToggles(t => ({ ...t, curiosity: v })) }),
+        jsx(Toggle, { label: 'Invention Engine', desc: 'Cross-domain bridge building and novel connections', value: toggles.invention, onChange: v => setToggles(t => ({ ...t, invention: v })) }),
+        jsx(Toggle, { label: 'Self-Improvement', desc: 'Performance monitoring and optimization', value: toggles.selfImprovement, onChange: v => setToggles(t => ({ ...t, selfImprovement: v })) }),
+        jsx(Toggle, { label: 'Idle Exploration', desc: 'Background research when inactive', value: toggles.idleExploration, onChange: v => setToggles(t => ({ ...t, idleExploration: v })) }),
+        jsx(Toggle, { label: 'Auto-Save', desc: 'Persist brain state after each interaction', value: toggles.autoSave, onChange: v => setToggles(t => ({ ...t, autoSave: v })) }),
+
+        // Autonomy
+        jsx('div', { style: { fontSize: '14px', fontWeight: 600, marginTop: '32px', marginBottom: '16px' }, children: 'Autonomy Level' }),
+        jsxs('div', {
+          style: { display: 'flex', gap: '8px' },
+          children: ['Supervised', 'Guided', 'Autonomous'].map((level, i) =>
+            jsx('button', {
+              key: level,
+              style: {
+                flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--border)',
+                background: i === 0 ? 'var(--accent-bg)' : 'var(--bg-surface)',
+                color: i === 0 ? 'var(--accent)' : 'var(--text-secondary)',
+                cursor: 'pointer', fontSize: '13px', fontWeight: 500,
+              },
+              children: level,
+            })
+          ),
+        }),
+      ],
+    }),
+  });
+}
+
+// ─── App Root ───────────────────────────────────────
+function App() {
+  const [activeTab, setActiveTab] = useState('chat');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [activeMessages, setActiveMessages] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [proposals, setProposals] = useState([]);
+
+  // Load conversations and stats on mount
+  useEffect(() => {
+    API.listConversations().then(data => {
+      const convs = (data.conversations || []).map(c => ({
+        id: c.id, title: c.name, messageCount: c.message_count,
+        updatedAt: c.updated_at,
+      }));
+      setSessions(convs);
+      if (convs.length > 0) {
+        setActiveSessionId(convs[0].id);
+        API.getConversation(convs[0].id).then(d => {
+          setActiveMessages((d.messages || []).map(m => ({
+            role: m.role === 'user' ? 'user' : 'lu',
+            text: m.content,
+            meta: m.sources && m.sources.length ? {
+              sources: m.sources, atoms_used: 0, coherence_score: 0, traversal_hops: 0, scar_warnings: [],
+            } : undefined,
+          })));
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+    API.stats().then(setStats).catch(() => {});
+    const interval = setInterval(() => {
+      API.stats().then(setStats).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Build currentSession object for ChatTab compatibility
+  const currentSession = { title: (sessions.find(s => s.id === activeSessionId) || {}).title || 'New Chat', messages: activeMessages };
+
+  // Load messages when switching sessions
+  async function handleSelectSession(index) {
+    const s = sessions[index];
+    if (!s) return;
+    setActiveSessionId(s.id);
+    try {
+      const data = await API.getConversation(s.id);
+      setActiveMessages((data.messages || []).map(m => ({
+        role: m.role === 'user' ? 'user' : 'lu',
+        text: m.content,
+        meta: m.sources && m.sources.length ? {
+          sources: m.sources, atoms_used: 0, coherence_score: 0, traversal_hops: 0, scar_warnings: [],
+        } : undefined,
+      })));
+    } catch { setActiveMessages([]); }
+  }
+
+  async function handleChatSend(message) {
+    // Ensure we have an active conversation
+    let cid = activeSessionId;
+    if (!cid) {
+      const created = await API.createConversation();
+      cid = created.id;
+      setActiveSessionId(cid);
+      setSessions(prev => [{ id: cid, title: 'New Chat', messageCount: 0 }, ...prev]);
+    }
+
+    // Add user message optimistically
+    setActiveMessages(prev => [...prev, { role: 'user', text: message }]);
+    // Update sidebar title from first message
+    setSessions(prev => prev.map(s => s.id === cid && s.messageCount === 0 ? { ...s, title: message.slice(0, 40) } : s));
+
+    try {
+      const resp = await API.chat(message, cid);
+      setActiveMessages(prev => [...prev, {
+        role: 'lu',
+        text: resp.text || '(no response)',
+        meta: {
+          atoms_used: resp.atoms_used,
+          coherence_score: resp.coherence_score,
+          traversal_hops: resp.traversal_hops,
+          sources: resp.sources || [],
+          scar_warnings: resp.scar_warnings || [],
+        },
+      }]);
+      // Update message count in sidebar
+      setSessions(prev => prev.map(s => s.id === cid ? { ...s, messageCount: (s.messageCount || 0) + 2 } : s));
+      API.stats().then(setStats).catch(() => {});
+    } catch (err) {
+      setActiveMessages(prev => [...prev, { role: 'lu', text: `Error: ${err.message}` }]);
+    }
+  }
+
+  async function handleNewSession() {
+    try {
+      const created = await API.createConversation();
+      const newSession = { id: created.id, title: 'New Chat', messageCount: 0 };
+      setSessions(prev => [newSession, ...prev]);
+      setActiveSessionId(created.id);
+      setActiveMessages([]);
+    } catch (err) {
+      console.error('Failed to create conversation:', err);
+    }
+  }
+
+  async function handleApprove(id) {
+    await API.approve(id);
+    setProposals(p => p.filter(pr => pr.id !== id));
+    API.stats().then(setStats).catch(() => {});
+  }
+
+  async function handleReject(id) {
+    await API.reject(id);
+    setProposals(p => p.filter(pr => pr.id !== id));
+  }
+
+  async function handleIngest(text, source) {
+    const result = await API.ingest(text, source);
+    // Add proposals from ingest
+    if (result.proposals) {
+      setProposals(prev => [...prev, ...result.proposals.filter(p => p.status === 'READY')]);
+    }
+    API.stats().then(setStats).catch(() => {});
+    return result;
+  }
+
+  const tabs = [
+    { id: 'chat', label: 'Chat', icon: MessageSquare },
+    { id: 'trainer', label: 'Trainer', icon: GraduationCap },
+    { id: 'brain-map', label: 'Brain Map', icon: Network },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  function renderTab() {
+    switch (activeTab) {
+      case 'chat': return jsx(ChatTab, { session: currentSession, onSend: handleChatSend });
+      case 'trainer': return jsx(TrainerTab, { proposals, onApprove: handleApprove, onReject: handleReject, onIngest: handleIngest });
+      case 'brain-map': return jsx(BrainMapTab, {});
+      case 'settings': return jsx(SettingsTab, { stats });
+      default: return null;
+    }
+  }
+
+  function renderRightPanel() {
+    switch (activeTab) {
+      case 'chat': return jsx(ChatRightPanel, { session: currentSession });
+      case 'brain-map': return jsx(BrainMapRightPanel, {});
+      default: return jsx('div', {
+        style: { padding: '20px', color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', marginTop: '40px' },
+        children: 'Context panel',
+      });
+    }
+  }
+
+  return jsxs('div', {
+    id: 'app',
+    children: [
+      // Tab bar
+      jsxs('div', {
+        className: 'tab-bar',
+        children: [
+          // Sidebar toggle
+          jsx('button', {
+            onClick: () => setSidebarCollapsed(!sidebarCollapsed),
+            style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', marginRight: '4px' },
+            children: jsx(Icon, { icon: PanelLeftClose, size: 16 }),
+          }),
+          // Tabs
+          ...tabs.map(tab =>
+            jsxs('button', {
+              key: tab.id,
+              className: `tab-btn ${activeTab === tab.id ? 'active' : ''}`,
+              onClick: () => setActiveTab(tab.id),
+              children: [
+                jsx(Icon, { icon: tab.icon, size: 14, style: { marginRight: '6px', verticalAlign: '-2px' } }),
+                tab.label,
+              ],
+            })
+          ),
+          // Spacer
+          jsx('div', { style: { flex: 1 } }),
+          // Bond status
+          jsxs('div', {
+            style: { fontSize: '11px', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '5px', marginRight: '8px' },
+            children: [
+              jsx('span', { style: { width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' } }),
+              'Terminal Bond Active',
+            ],
+          }),
+          // Right panel toggle
+          jsx('button', {
+            onClick: () => setRightPanelCollapsed(!rightPanelCollapsed),
+            style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' },
+            children: jsx(Icon, { icon: PanelRightClose, size: 16 }),
+          }),
+        ],
+      }),
+      // Main layout
+      jsxs('div', {
+        style: { display: 'flex', flex: 1, overflow: 'hidden' },
+        children: [
+          jsx(Sidebar, {
+            sessions, activeSession: sessions.findIndex(s => s.id === activeSessionId),
+            onSelect: handleSelectSession,
+            onNew: handleNewSession,
+            stats, collapsed: sidebarCollapsed,
+          }),
+          // Main content
+          jsx('div', {
+            style: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+            children: renderTab(),
+          }),
+          // Right panel
+          jsx('div', {
+            className: `right-panel ${rightPanelCollapsed ? 'collapsed' : ''}`,
+            children: renderRightPanel(),
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// ─── Mount ──────────────────────────────────────────
+const root = createRoot(document.getElementById('app'));
+root.render(jsx(App, {}));
+</script>
+</body>
+</html>

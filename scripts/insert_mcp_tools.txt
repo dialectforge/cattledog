@@ -1,0 +1,26 @@
+"lu_remember" => {
+                let text = match args["text"].as_str() {
+                    Some(t) if !t.is_empty() => t,
+                    _ => return tool_error(id, "text parameter is required"),
+                };
+                let emb = embedding::semantic_embed(text);
+                self.semantic_mem.push((text.to_string(), emb));
+                tool_result(id, &format!("Remembered ({} facts in semantic memory).", self.semantic_mem.len()))
+            }
+            "lu_semantic_recall" => {
+                let query = match args["query"].as_str() {
+                    Some(t) if !t.is_empty() => t,
+                    _ => return tool_error(id, "query parameter is required"),
+                };
+                let top_k = args["top_k"].as_u64().unwrap_or(3) as usize;
+                let threshold = args["threshold"].as_f64().unwrap_or(0.0) as f32;
+                let qe = embedding::semantic_embed(query);
+                let mut scored: Vec<(f32, String)> = self.semantic_mem.iter()
+                    .map(|(t, e)| (embedding::cosine_similarity(&qe, e), t.clone()))
+                    .filter(|(s, _)| *s >= threshold)
+                    .collect();
+                scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+                let hits: Vec<serde_json::Value> = scored.into_iter().take(top_k)
+                    .map(|(s, t)| json!({"text": t, "similarity": s})).collect();
+                tool_result(id, &json!({"query": query, "hits": hits}).to_string())
+            }

@@ -1,0 +1,26 @@
+"lu_scar_action" => {
+                if let Some(err) = self.check_tier(AutonomyTier::Collaborative, id) {
+                    return err;
+                }
+                let text = match args["text"].as_str() {
+                    Some(t) if !t.is_empty() => t,
+                    _ => return tool_error(id, "text parameter is required"),
+                };
+                let reason = args["reason"].as_str().unwrap_or("CattleDog semantic policy scar");
+                self.brain.semantic_scar_action(text, reason);
+                tool_result(id, &format!("Semantic scar implanted over action: {}", text))
+            }
+            "lu_scar_check" => {
+                let text = match args["text"].as_str() {
+                    Some(t) if !t.is_empty() => t,
+                    _ => return tool_error(id, "text parameter is required"),
+                };
+                let threshold = args["threshold"].as_f64().map(|x| x as f32);
+                let hits = self.brain.semantic_scar_check(text, threshold);
+                let payload = json!({
+                    "triggered": !hits.is_empty(),
+                    "threshold": threshold,
+                    "scars": hits,
+                });
+                tool_result(id, &payload.to_string())
+            }

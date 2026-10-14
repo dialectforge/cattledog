@@ -1,0 +1,25 @@
+[package]
+license = "Apache-2.0"
+name    = "mcp_server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "lu_mcp_v2"
+path = "src/main.rs"
+
+[[bin]]
+name = "lu_mcp_v2_cd"
+path = "src/main.rs"
+
+[dependencies]
+brain      = { path = "../brain" }
+df_core    = { path = "../df_core" }
+graph      = { path = "../graph" }
+embedding  = { path = "../embedding" }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+chrono     = { workspace = true }
+tokio      = { workspace = true }
+thiserror  = { workspace = true }
+anyhow     = { workspace = true }

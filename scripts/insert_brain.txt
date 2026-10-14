@@ -1,0 +1,19 @@
+/// CattleDog: implant a semantic (embedding-similarity) scar over an action description.
+    /// Wires the dormant ScarV2 fingerprint path. NOTE: the only working text embedder is
+    /// embedding::StubEngine (lexical/bag-of-words FNV projection), so similarity here is
+    /// vocabulary-overlap, not true semantic paraphrase. Documented limitation.
+    pub fn semantic_scar_action(&mut self, text: &str, reason: &str) {
+        use embedding::EmbeddingEngine;
+        let emb = embedding::StubEngine::new(384).embed(text).unwrap_or_else(|_| vec![0.0; 384]);
+        self.amygdala.record_scar(df_core::Seed::generate(), text, reason, Some(emb));
+    }
+
+    /// CattleDog: check candidate text against all semantic scars. Wires amygdala::check_proposal
+    /// (the dormant ScarV2::check_similarity trigger) into a live, callable path. Returns the
+    /// triggered scar descriptions (label + reason + similarity).
+    pub fn semantic_scar_check(&mut self, text: &str, threshold: Option<f32>) -> Vec<String> {
+        use embedding::EmbeddingEngine;
+        if let Some(t) = threshold { self.amygdala.scar_similarity_threshold = t; }
+        let emb = embedding::StubEngine::new(384).embed(text).unwrap_or_else(|_| vec![0.0; 384]);
+        self.amygdala.check_proposal(&emb)
+    }

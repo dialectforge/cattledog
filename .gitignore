@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+logs/
+*.stderr.log
+# Brain state is owned but regenerable via sandbox/init_sandbox.py; not source.
+*.lbr
+sandbox/*.png
+target/
+*.lbr
+*.lbr.*
+*.wal
+.env
+.env.*
+*.p8
+*.pem
+*.key
+master.key
+*.db
+*.sqlite
+logs/
+__pycache__/
+.DS_Store

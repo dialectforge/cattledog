@@ -1,0 +1,11 @@
+[package]
+license = "Apache-2.0"
+name    = "encryption"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+df_core = { path = "../df_core" }
+serde   = { workspace = true }
+sha2    = { workspace = true }
+rand    = { workspace = true }

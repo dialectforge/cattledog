@@ -1,0 +1,14 @@
+[package]
+license = "Apache-2.0"
+name    = "graph"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+df_core    = { path = "../df_core" }
+embedding  = { path = "../embedding" }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+chrono     = { workspace = true }
+uuid       = { workspace = true }
+thiserror  = { workspace = true }

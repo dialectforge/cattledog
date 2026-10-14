@@ -1,0 +1,14 @@
+[package]
+license = "Apache-2.0"
+name    = "embedding"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Enable to compile the ONNX Runtime backend for real BGE-small inference
+onnx = []
+
+[dependencies]
+serde     = { workspace = true }
+thiserror = { workspace = true }
+fastembed = "4"

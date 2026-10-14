@@ -1,0 +1,21 @@
+[package]
+name = "desktop"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Lu AI Desktop — modern web-based UI served via HTTP. The next-generation terminal."
+
+[[bin]]
+name = "lu_ai_desktop"
+path = "src/main.rs"
+
+[dependencies]
+brain = { workspace = true }
+graph = { workspace = true }
+df_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tiny_http = "0.12"
+dirs = "6"

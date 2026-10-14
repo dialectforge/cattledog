@@ -1,0 +1,21 @@
+[package]
+name = "brain"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The complete associative intelligence. Graph + Pattern Engine + DF Core. Learns, recalls, revokes, evolves."
+
+[dependencies]
+df_core = { workspace = true }
+graph = { workspace = true }
+pattern_engine = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+chrono = { workspace = true }
+pdf-extract = { workspace = true }
+reqwest = { workspace = true }
+scraper = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }

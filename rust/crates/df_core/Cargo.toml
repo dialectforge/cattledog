@@ -1,0 +1,15 @@
+[package]
+name = "df_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "DialectForge Core — the nervous system. Seed generation, seed gating, dialect negotiation, compression primitives, bond protocol. Everything else imports this."
+
+[dependencies]
+sha2 = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+hex = "0.4"

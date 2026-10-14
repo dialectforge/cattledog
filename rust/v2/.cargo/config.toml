@@ -1,0 +1,12 @@
+# Workspace-level Cargo configuration for Lu Brain v2
+
+[env]
+# windows-sys 0.61.x (pulled in by Tauri) has a massive --check-cfg argument
+# that causes a stack overflow in rustc on Windows without a larger stack.
+# 128 MiB is sufficient to compile the full dependency tree.
+RUST_MIN_STACK = "134217728"
+
+[build]
+# Single job for the desktop crate avoids OOM during windows-sys codegen.
+# Individual crates (brain, graph, etc.) are unaffected and build in parallel.
+jobs = 4

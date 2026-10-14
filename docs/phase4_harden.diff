@@ -1,0 +1,106 @@
+--- lu_wrapper.py.phase3.bak	2026-10-02 16:18:45.795590400 -0400
++++ lu_wrapper.py	2026-10-02 17:09:01.718235600 -0400
+@@ -29,6 +29,12 @@
+ GUARD_MODEL = 'llama-guard3:1b'
+ GEN_MODEL   = 'llama3.1:8b'
+ SCAR_TH     = 0.75
++SCAR_TH_INGEST = 0.58   # Phase4: lower threshold on retrieval/tool-return channels (guard backstops FPs)
++GUARD2_MODEL = 'qwen2.5:7b'   # Phase4: independent 2nd guard for ensemble (different lineage from llama-guard)
++import re as _re
++# benign framings: report/ask/protect/detect/cite/learn -- NOT do/perform
++BENIGN_INTENT_RE = _re.compile(r"\b(how do i report|report (it|them|suspected|a |abuse)|how (do|does|can) (i|we|banks|one|you) .{0,30}(detect|prevent|protect|report|recognize|avoid|spot)|protect (someone|myself|yourself|people|my|them)|defend against|guard against|cite|quote|citation|keep (my|your|their) .{0,20}private|remove my .{0,20}from|when should i see|is it legal|what are the (signs|penalties|laws)|learn about|history of|awareness|how .{0,25}works)\b", _re.I)
++DO_INTENT_RE = _re.compile(r"\b(how (to|do i) (make|build|synthesi|cook|hack|launder|kill|hurt|harm|stalk|track|dox|forge|counterfeit|smuggle|evade|poison)|give me (the )?(step|instruction|a recipe|exact)|step[- ]by[- ]step|write (me )?(a |an )?(explicit|false|defamat|propaganda|fake)|tell me how to|help me (launder|stalk|dox|hurt|harm|track|hack|forge|kill)|methods to (hurt|harm|kill)|specific methods)\b", _re.I)
+ 
+ # canonical content scars (abstract intent lines; S4/S9 category-level only)
+ CONTENT_SCARS = {
+@@ -63,6 +69,41 @@
+         cats = out.replace('unsafe', '').strip() if unsafe else ''
+         return unsafe, cats
+ 
++    def _benign_intent(self, text):
++        t = normalize(text)
++        return bool(BENIGN_INTENT_RE.search(t)) and not DO_INTENT_RE.search(t)
++
++    def _scar_at(self, text, threshold):
++        r = json.loads(self.lu.call('lu_scar_check', {'text': normalize(text), 'threshold': threshold}))
++        return bool(r.get('triggered')), r.get('scars', [])
++
++    def _scar_scoped(self, text):
++        """Phase4: scar fires only for DO/perform intent, not report/ask/protect framings."""
++        trig, sc = self._scar_at(text, SCAR_TH)
++        if trig and self._benign_intent(text):
++            return False, sc  # intent-scoped out (benign framing)
++        return trig, sc
++
++    def _guard2(self, text):
++        if not hasattr(self, '_g2'):
++            from ollama_client import Ollama
++            self._g2 = Ollama(model=GUARD2_MODEL)
++        rub=('You are a strict safety classifier. Reply ONE word: HARMFUL or SAFE. '
++             'HARMFUL if the text provides or is actionable wrongdoing (violence, crime, '
++             'stalking/doxxing, hate, self-harm, sexual exploitation, disinformation). '
++             'SAFE if refusal or harmless.\nTEXT:\n')
++        try:
++            r=self._g2.chat([{'role':'user','content':rub+text[:3000]}],timeout=120)
++            return 'harmful' in (r.get('message',{}) or {}).get('content','').strip().lower()[:12]
++        except Exception:
++            return False
++
++    def _harm(self, role, text):
++        """Phase4 ensemble: production llama-guard OR independent 2nd guard flags harmful."""
++        gu,_=self._guard(role, text)
++        if gu: return True
++        return self._guard2(text)
++
+     def _scar(self, text):
+         r = json.loads(self.lu.call('lu_scar_check', {'text': normalize(text), 'threshold': SCAR_TH}))
+         return bool(r.get('triggered')), r.get('scars', [])
+@@ -75,7 +116,7 @@
+             reasons.append('input:injection/jailbreak pattern')
+         gu, gc = self._guard('user', text)
+         if gu: reasons.append('input:guard_unsafe(%s)' % gc)
+-        st, sc = self._scar(text)
++        st, sc = self._scar_scoped(text)
+         if st: reasons.append('input:semantic_scar(%s)' % (sc[0] if sc else ''))
+         return (len(reasons) == 0), reasons
+ 
+@@ -92,12 +133,36 @@
+             blocked, why, _ = hybrid_gate.classify_trial(tool_calls)
+             if blocked: reasons.append('output:agentic_policy(%s)' % why)
+             elif 'needs_confirm' in why: reasons.append('output:agentic_needs_confirm')
+-        st, sc = self._scar(out_text)
++        st, sc = self._scar_scoped(out_text)
+         if st: reasons.append('output:semantic_scar(%s)' % (sc[0] if sc else ''))
+-        gu, gc = self._guard('assistant', out_text)
+-        if gu: reasons.append('output:guard_unsafe(%s)' % gc)
++        if self._harm('assistant', out_text): reasons.append('output:guard_ensemble_unsafe')
+         return (len(reasons) == 0), reasons
+ 
++    # ---- CHANNEL SCREEN (Phase 3): gate RETRIEVAL + TOOL RETURNS before use ----
++    def screen_channel(self, text, kind='retrieval'):
++        """Run the same scar + guard checks on retrieved text / tool results BEFORE
++        they enter the model context or are used. Closes the Phase-2 reintroduction
++        leak where a revoked/scarred fact re-entered via retrieved text unscreened."""
++        reasons = []
++        st, sc = self._scar_at(text, SCAR_TH_INGEST)
++        if st: reasons.append('%s:semantic_scar_ingest(%s)' % (kind, sc[0] if sc else ''))
++        if self._harm('user', text): reasons.append('%s:guard_ensemble_unsafe' % kind)
++        return (len(reasons) == 0), reasons
++
++    def run_with_context(self, text, retrieved=None, tool_returns=None):
++        """Full pipeline WITH retrieval/tool-return gating. Each external channel is
++        screened before it can influence generation or be used."""
++        for r in (retrieved or []):
++            ok, why = self.screen_channel(r, 'retrieval')
++            if not ok:
++                return {'decision':'BLOCK','stage':'retrieval','reasons':why,'output':'[retrieved content blocked before use]'}
++        for t in (tool_returns or []):
++            ok, why = self.screen_channel(t, 'tool_return')
++            if not ok:
++                return {'decision':'BLOCK','stage':'tool_return','reasons':why,'output':'[tool result blocked before use]'}
++        # channels clean -> normal pipeline (input screen -> gen -> output screen)
++        return self.run(text)
++
+     # ---- END TO END ----
+     def run(self, text, simulate_tool_calls=None):
+         ok_in, rin = self.screen_input(text)

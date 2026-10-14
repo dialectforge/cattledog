@@ -1,0 +1,20 @@
+[package]
+name = "mcp_server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "MCP server for Lu Ai brain. Claude Desktop connects here to train the brain at scale."
+
+[[bin]]
+name = "lu_ai_mcp"
+path = "src/main.rs"
+
+[dependencies]
+brain = { workspace = true }
+graph = { workspace = true }
+df_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+dirs = "6"
